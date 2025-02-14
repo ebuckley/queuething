@@ -47,12 +47,15 @@ export class Worker {
         this.busy = false;
         this.stateCallback = stateCallback;
         this.queueManager = queueManager;
+        this.totalBusyTime = 0;
+        this.lastBusyStartTime = null;
     }
 
     async processJob(job) {
         this.busy = true;
         this.currentJob = job;
         this.jobStartTime = Date.now();
+        this.lastBusyStartTime = Date.now();
         job.startedAt = Date.now();
         if (this.stateCallback) this.stateCallback();
         
@@ -75,6 +78,12 @@ export class Worker {
         this.queueManager.updateLeadTimeMetrics(leadTime);
 
         console.log(`Worker ${this.id} completed Job ${job.id} (Lead time: ${leadTime}ms)`);
+        
+        // Update busy time tracking
+        const busyDuration = Date.now() - this.lastBusyStartTime;
+        this.totalBusyTime += busyDuration;
+        this.lastBusyStartTime = null;
+        
         this.busy = false;
         this.currentJob = null;
         this.jobStartTime = null;
@@ -120,6 +129,9 @@ export class QueueManager {
         this.maxLeadTime = 0;
         this.totalLeadTime = 0;
         
+        // Start time for utilization calculation
+        this.queueStartTime = null;
+        
         // Configuration with defaults
         this.config = {
             minProcessingTime: 1000,  // minimum job processing time in ms
@@ -138,6 +150,7 @@ export class QueueManager {
     start() {
         if (this.running) return;
         this.running = true;
+        this.queueStartTime = Date.now();
 
         // Generate new jobs periodically
         this.jobCreationInterval = setInterval(() => {
@@ -191,12 +204,34 @@ export class QueueManager {
         this.maxLeadTime = 0;
         this.totalLeadTime = 0;
         this.completedJobs = [];
+        
+        // Reset utilization tracking
+        this.queueStartTime = null;
+        this.workers.forEach(worker => {
+            worker.totalBusyTime = 0;
+            worker.lastBusyStartTime = null;
+        });
         this.stateCallback(this.getState());
     }
     getState() {
         const avgLeadTime = this.completedJobs.length > 0 
             ? this.totalLeadTime / this.completedJobs.length 
             : 0;
+
+        // Calculate worker utilization
+        let workerUtilization = 0;
+        if (this.running && this.queueStartTime) {
+            const totalTime = Date.now() - this.queueStartTime;
+            const totalBusyTime = this.workers.reduce((sum, worker) => {
+                // Add current busy time for active workers
+                const currentBusyTime = worker.lastBusyStartTime 
+                    ? Date.now() - worker.lastBusyStartTime 
+                    : 0;
+                return sum + worker.totalBusyTime + (worker.busy ? currentBusyTime : 0);
+            }, 0);
+            // Average across all workers
+            workerUtilization = (totalBusyTime / (totalTime * this.workers.length)) * 100;
+        }
 
         return {
             isRunning: this.running,
@@ -208,7 +243,8 @@ export class QueueManager {
                 max: this.maxLeadTime,
                 average: avgLeadTime,
                 completed: this.completedJobs.length
-            }
+            },
+            utilization: Math.min(100, Math.max(0, workerUtilization))
         }
     }
 }

@@ -213,6 +213,37 @@ export function QueueVisualizer() {
                 <div style={styles.metricsPanel}>
                     <h3 style={{ margin: 0, color: '#444' }}>Queue Metrics</h3>
                     <div style={styles.metricGrid}>
+                        <div style={{
+                            ...styles.metricCard,
+                            gridColumn: '1 / -1',
+                            backgroundColor: queueState.utilization > 80 ? '#fff3e0' : '#f1f8e9'
+                        }}>
+                            <div style={styles.metricLabel}>
+                                <span>⚡</span>
+                                <span>Worker Utilization</span>
+                            </div>
+                            <div style={{
+                                ...styles.metricValue,
+                                color: queueState.utilization > 80 ? '#f57c00' : '#4caf50'
+                            }}>
+                                {queueState.utilization.toFixed(1)}%
+                            </div>
+                            <div style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#e0e0e0',
+                                borderRadius: '2px',
+                                marginTop: '8px',
+                                overflow: 'hidden'
+                            }}>
+                                <div style={{
+                                    width: `${queueState.utilization}%`,
+                                    height: '100%',
+                                    backgroundColor: queueState.utilization > 80 ? '#f57c00' : '#4caf50',
+                                    transition: 'width 0.3s ease-in-out'
+                                }} />
+                            </div>
+                        </div>
                         <div style={styles.metricCard}>
                             <div style={styles.metricLabel}>
                                 <span>📊</span>
